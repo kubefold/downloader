@@ -1,4 +1,4 @@
-# Protein Database Downloader
+# 🧬 Protein Database Downloader
 
 A tool for downloading and decompressing protein databases for bioinformatics research.
 
