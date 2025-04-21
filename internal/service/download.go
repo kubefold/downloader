@@ -1,6 +1,7 @@
 package service
 
 import (
+	"archive/tar"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,28 +34,39 @@ func newDownloadService() DownloadService {
 const baseUrl = "https://storage.googleapis.com/alphafold-databases/v3.0/"
 
 func (d downloadService) Download(dataset types.Dataset, destination string, rate int) error {
-	destination = filepath.Join(destination, string(dataset))
-	url := baseUrl + string(dataset) + ".zst"
+	datasetStr := string(dataset)
+	isTar := strings.HasSuffix(datasetStr, ".tar")
 
-	if fileInfo, err := os.Stat(destination); err == nil {
-		if fileInfo.Size() == dataset.Size() {
-			return nil
+	finalDestination := destination
+	if isTar {
+		finalDestination = destination
+	} else {
+		finalDestination = filepath.Join(destination, datasetStr)
+	}
+
+	url := baseUrl + datasetStr + ".zst"
+
+	if isTar {
+		if dirExists, err := d.directoryExists(finalDestination); err == nil && dirExists {
+			dirSize, err := d.calculateDirSize(finalDestination)
+			if err == nil && dirSize == dataset.Size() {
+				return nil
+			}
 		}
-		if err := os.Remove(destination); err != nil {
-			return fmt.Errorf("failed to remove existing file with incorrect size: %w", err)
+	} else {
+		if fileInfo, err := os.Stat(finalDestination); err == nil {
+			if fileInfo.Size() == dataset.Size() {
+				return nil
+			}
+			if err := os.Remove(finalDestination); err != nil {
+				return fmt.Errorf("failed to remove existing file with incorrect size: %w", err)
+			}
 		}
 	}
 
-	destDir := filepath.Dir(destination)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := os.MkdirAll(destination, 0755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
-
-	destFile, err := os.Create(destination)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer destFile.Close()
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,
@@ -83,35 +96,150 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 	defer zReader.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	go d.trackDownloadProgress(ctx, &wg, destFile, dataset)
+	if isTar {
+		go d.trackDirProgress(ctx, &wg, finalDestination, dataset)
 
-	_, err = io.Copy(destFile, zReader)
-	cancel()
-	wg.Wait()
+		tarReader := tar.NewReader(zReader)
+		if err := d.extractTar(tarReader, finalDestination); err != nil {
+			return fmt.Errorf("failed to extract tar archive: %w", err)
+		}
 
-	if err != nil {
-		return fmt.Errorf("failed to download and decompress data: %w", err)
+		dirSize, err := d.calculateDirSize(finalDestination)
+		if err == nil {
+			logrus.WithFields(logrus.Fields{
+				"dataset": dataset,
+				"size":    dirSize,
+				"unit":    "bytes",
+				"type":    "download",
+				"total":   dataset.Size(),
+			}).Info("Tar extraction completed")
+		}
+	} else {
+		destFile, err := os.Create(finalDestination)
+		if err != nil {
+			return fmt.Errorf("failed to create destination file: %w", err)
+		}
+		defer destFile.Close()
+
+		go d.trackFileProgress(ctx, &wg, destFile, dataset)
+
+		_, err = io.Copy(destFile, zReader)
+		if err != nil {
+			return fmt.Errorf("failed to download and decompress data: %w", err)
+		}
+
+		fileInfo, err := destFile.Stat()
+		if err == nil {
+			logrus.WithFields(logrus.Fields{
+				"dataset": dataset,
+				"size":    fileInfo.Size(),
+				"unit":    "bytes",
+				"hash":    d.hashFile(destFile),
+				"type":    "download",
+				"total":   dataset.Size(),
+			}).Info("Download completed")
+		}
 	}
 
-	fileInfo, err := destFile.Stat()
-	if err == nil {
-		logrus.WithFields(logrus.Fields{
-			"dataset": dataset,
-			"size":    fileInfo.Size(),
-			"unit":    "bytes",
-			"hash":    d.hashFile(destFile),
-			"type":    "download",
-			"total":   dataset.Size(),
-		}).Info("Download completed")
+	wg.Wait()
+	return nil
+}
+
+func (d downloadService) extractTar(tarReader *tar.Reader, destination string) error {
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(destination, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			dir := filepath.Dir(target)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				return err
+			}
+
+			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+
+			if _, err := io.Copy(file, tarReader); err != nil {
+				file.Close()
+				return err
+			}
+
+			file.Close()
+		}
 	}
 
 	return nil
 }
 
-func (d downloadService) trackDownloadProgress(ctx context.Context, wg *sync.WaitGroup, file *os.File, dataset types.Dataset) {
+func (d downloadService) directoryExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
+func (d downloadService) calculateDirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size, err
+}
+
+func (d downloadService) trackDirProgress(ctx context.Context, wg *sync.WaitGroup, dirPath string, dataset types.Dataset) {
+	defer wg.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			size, err := d.calculateDirSize(dirPath)
+			if err == nil {
+				logrus.WithFields(logrus.Fields{
+					"dataset": dataset,
+					"size":    size,
+					"unit":    "bytes",
+					"type":    "download",
+					"total":   dataset.Size(),
+				}).Info("Download progress")
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (d downloadService) trackFileProgress(ctx context.Context, wg *sync.WaitGroup, file *os.File, dataset types.Dataset) {
 	defer wg.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
