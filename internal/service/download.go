@@ -32,7 +32,7 @@ func newDownloadService() DownloadService {
 const baseUrl = "https://storage.googleapis.com/alphafold-databases/v3.0/"
 
 func (d downloadService) Download(dataset types.Dataset, destination string, rate int) error {
-	destination = fmt.Sprintf("%s/%s", destination, string(dataset))
+	destination = filepath.Join(destination, string(dataset))
 	url := baseUrl + string(dataset) + ".zst"
 
 	if _, err := os.Stat(destination); err == nil {
