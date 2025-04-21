@@ -35,8 +35,13 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 	destination = filepath.Join(destination, string(dataset))
 	url := baseUrl + string(dataset) + ".zst"
 
-	if _, err := os.Stat(destination); err == nil {
-		return nil
+	if fileInfo, err := os.Stat(destination); err == nil {
+		if fileInfo.Size() == dataset.Size() {
+			return nil
+		}
+		if err := os.Remove(destination); err != nil {
+			return fmt.Errorf("failed to remove existing file with incorrect size: %w", err)
+		}
 	}
 
 	destDir := filepath.Dir(destination)
