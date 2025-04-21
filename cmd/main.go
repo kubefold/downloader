@@ -1,12 +1,17 @@
 package main
 
 import (
+	"os"
+	"strconv"
+
 	"github.com/kubefold/downloader/internal/service"
 	"github.com/kubefold/downloader/internal/types"
 	"github.com/sirupsen/logrus"
-	"os"
-	"strconv"
 )
+
+func init() {
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+}
 
 func main() {
 	dataset := os.Getenv("DATASET")
