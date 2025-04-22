@@ -3,7 +3,7 @@ package types
 type Dataset string
 
 const (
-	DatasetMHYClusters Dataset = "mgy_clusters_2022_05.fa"
+	DatasetMGYClusters Dataset = "mgy_clusters_2022_05.fa"
 	DatasetBFD         Dataset = "bfd-first_non_consensus_sequences.fasta"
 	DatasetUniRef90    Dataset = "uniref90_2022_05.fa"
 	DatasetUniProt     Dataset = "uniprot_all_2021_04.fa"
@@ -15,7 +15,7 @@ const (
 )
 
 var Datasets = []Dataset{
-	DatasetMHYClusters,
+	DatasetMGYClusters,
 	DatasetBFD,
 	DatasetUniProt,
 	DatasetUniRef90,
@@ -36,7 +36,7 @@ func (d Dataset) Size() int64 {
 		return 228433680
 	case DatasetBFD:
 		return 18171626364
-	case DatasetMHYClusters:
+	case DatasetMGYClusters:
 		return 128579703018
 	case DatasetNT:
 		return 80977012680
@@ -61,7 +61,7 @@ func (d Dataset) Hash() string {
 		return "55ef718071244ad7433678ba249aaeb67707b499f0189a38edadca8d64972318"
 	case DatasetBFD:
 		return "fd87dca06401b03f4ac3c59a82dac14db491a7933ed6abaa19e14e02c6eb1af5"
-	case DatasetMHYClusters:
+	case DatasetMGYClusters:
 		return "9e7f50956c19cbcd8181dc5e9d7d6eebc08257cc858fc07d3ec88fd6b48dbbc9"
 	case DatasetNT:
 		return "14c05ac0827c9bf06a37acfc4b3dd1d66e48d5a5f713c0de68611aa7fedc00f9"
