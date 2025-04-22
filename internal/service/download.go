@@ -146,7 +146,6 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 		}
 	}
 
-	wg.Wait()
 	return nil
 }
 
