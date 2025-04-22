@@ -17,6 +17,7 @@ const (
 var Datasets = []Dataset{
 	DatasetMHYClusters,
 	DatasetBFD,
+	DatasetUniProt,
 	DatasetUniRef90,
 	DatasetPDB,
 	DatasetPDBSeqReq,
@@ -33,6 +34,22 @@ func (d Dataset) Size() int64 {
 	switch d {
 	case DatasetRFam:
 		return 228433680
+	case DatasetBFD:
+		return 18171626364
+	case DatasetMHYClusters:
+		return 128579703018
+	case DatasetNT:
+		return 80977012680
+	case DatasetPDB:
+		return 250521374720
+	case DatasetPDBSeqReq:
+		return 232899463
+	case DatasetUniProt:
+		return 108447942931
+	case DatasetUniRef90:
+		return 71821260491
+	case DatasetRNACentral:
+		return 13860314914
 	default:
 		return 0
 	}
