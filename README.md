@@ -15,6 +15,7 @@ The following protein datasets are supported:
 - `mgy_clusters_2022_05.fa` - MGY Clusters
 - `bfd-first_non_consensus_sequences.fasta` - BFD non-consensus sequences
 - `uniref90_2022_05.fa` - UniRef90
+- `uniprot_all_2021_04.fa` - UniProt
 - `pdb_2022_09_28_mmcif_files.tar` - PDB mmCIF files
 - `pdb_seqres_2022_09_28.fasta` - PDB sequence resources
 - `rnacentral_active_seq_id_90_cov_80_linclust.fasta` - RNACentral
