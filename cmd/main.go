@@ -1,11 +1,11 @@
 package main
 
 import (
+	"github.com/kubefold/downloader/pkg/types"
 	"os"
 	"strconv"
 
 	"github.com/kubefold/downloader/internal/service"
-	"github.com/kubefold/downloader/internal/types"
 	"github.com/sirupsen/logrus"
 )
 

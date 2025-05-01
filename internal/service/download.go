@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/kubefold/downloader/pkg/types"
 	"io"
 	"net/http"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/DataDog/zstd"
-	"github.com/kubefold/downloader/internal/types"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 )
