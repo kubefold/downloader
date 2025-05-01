@@ -28,6 +28,23 @@ type DownloadService interface {
 type downloadService struct {
 }
 
+type extractionProgress struct {
+	size int64
+	mu   sync.RWMutex
+}
+
+func (p *extractionProgress) update(size int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.size += size
+}
+
+func (p *extractionProgress) getSize() int64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.size
+}
+
 func newDownloadService() DownloadService {
 	return &downloadService{}
 }
@@ -110,23 +127,23 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 	wg.Add(1)
 
 	if isTar {
-		go d.trackDirProgress(ctx, &wg, finalDestination, dataset)
+		progress := &extractionProgress{}
+		go d.trackDirProgress(ctx, &wg, progress, dataset)
 
 		tarReader := tar.NewReader(zReader)
-		if err := d.extractTar(tarReader, finalDestination); err != nil {
+		extractedSize, err := d.extractTar(tarReader, finalDestination, progress)
+		if err != nil {
 			return fmt.Errorf("failed to extract tar archive: %w", err)
 		}
 
-		dirSize, err := d.calculateDirSize(finalDestination)
-		if err == nil {
-			logrus.WithFields(logrus.Fields{
-				"dataset": dataset,
-				"size":    dirSize,
-				"unit":    "bytes",
-				"type":    "download",
-				"total":   dataset.Size(),
-			}).Info("Tar extraction completed")
-		}
+		logrus.WithFields(logrus.Fields{
+			"dataset":       dataset,
+			"size":          extractedSize,
+			"unit":          "bytes",
+			"type":          "download",
+			"total":         dataset.Size(),
+			"extractMethod": "buffer",
+		}).Info("Tar extraction completed")
 	} else {
 		destFile, err := os.Create(finalDestination)
 		if err != nil {
@@ -157,14 +174,15 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 	return nil
 }
 
-func (d downloadService) extractTar(tarReader *tar.Reader, destination string) error {
+func (d downloadService) extractTar(tarReader *tar.Reader, destination string, progress *extractionProgress) (int64, error) {
+	var totalSize int64
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
+			return totalSize, err
 		}
 
 		target := filepath.Join(destination, header.Name)
@@ -172,29 +190,34 @@ func (d downloadService) extractTar(tarReader *tar.Reader, destination string) e
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
-				return err
+				return totalSize, err
 			}
 		case tar.TypeReg:
 			dir := filepath.Dir(target)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				return err
+				return totalSize, err
 			}
 
 			file, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				return err
+				return totalSize, err
 			}
 
-			if _, err := io.Copy(file, tarReader); err != nil {
+			written, err := io.Copy(file, tarReader)
+			if err != nil {
 				file.Close()
-				return err
+				return totalSize, err
 			}
 
+			totalSize += written
+			if progress != nil {
+				progress.update(written)
+			}
 			file.Close()
 		}
 	}
 
-	return nil
+	return totalSize, nil
 }
 
 func (d downloadService) directoryExists(path string) (bool, error) {
@@ -222,7 +245,7 @@ func (d downloadService) calculateDirSize(path string) (int64, error) {
 	return size, err
 }
 
-func (d downloadService) trackDirProgress(ctx context.Context, wg *sync.WaitGroup, dirPath string, dataset types.Dataset) {
+func (d downloadService) trackDirProgress(ctx context.Context, wg *sync.WaitGroup, progress *extractionProgress, dataset types.Dataset) {
 	defer wg.Done()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -230,16 +253,15 @@ func (d downloadService) trackDirProgress(ctx context.Context, wg *sync.WaitGrou
 	for {
 		select {
 		case <-ticker.C:
-			size, err := d.calculateDirSize(dirPath)
-			if err == nil {
-				logrus.WithFields(logrus.Fields{
-					"dataset": dataset,
-					"size":    size,
-					"unit":    "bytes",
-					"type":    "download",
-					"total":   dataset.Size(),
-				}).Info("Download progress")
-			}
+			size := progress.getSize()
+			logrus.WithFields(logrus.Fields{
+				"dataset":      dataset,
+				"size":         size,
+				"unit":         "bytes",
+				"type":         "download",
+				"total":        dataset.Size(),
+				"progressType": "buffer",
+			}).Info("Download progress")
 		case <-ctx.Done():
 			return
 		}
