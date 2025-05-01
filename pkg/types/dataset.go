@@ -85,7 +85,7 @@ func (d Dataset) Name() string {
 func (d Dataset) ShortName() string {
 	switch d {
 	case DatasetMGYClusters:
-		return "mhy-clusters"
+		return "mhyclusters"
 	case DatasetBFD:
 		return "bfd"
 	case DatasetUniRef90:
@@ -95,7 +95,7 @@ func (d Dataset) ShortName() string {
 	case DatasetPDB:
 		return "pdb"
 	case DatasetPDBSeqReq:
-		return "pdb-seqreq"
+		return "pdbseqreq"
 	case DatasetRNACentral:
 		return "rnacentral"
 	case DatasetRFam:
