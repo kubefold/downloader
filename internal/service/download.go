@@ -131,14 +131,14 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 		go d.trackDirProgress(ctx, &wg, progress, dataset)
 
 		tarReader := tar.NewReader(zReader)
-		extractedSize, err := d.extractTar(tarReader, finalDestination, progress)
+		_, err := d.extractTar(tarReader, finalDestination, progress)
 		if err != nil {
 			return fmt.Errorf("failed to extract tar archive: %w", err)
 		}
 
 		logrus.WithFields(logrus.Fields{
 			"dataset":       dataset,
-			"size":          extractedSize,
+			"size":          dataset.Size(),
 			"unit":          "bytes",
 			"type":          "download",
 			"total":         dataset.Size(),
