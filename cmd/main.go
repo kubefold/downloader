@@ -40,6 +40,6 @@ func main() {
 	services := service.NewServices()
 	err = services.Download().Download(types.Dataset(dataset), destination, int(parsedRate))
 	if err != nil {
-		logrus.Fatalf("failed to download dataset: %s", dataset)
+		logrus.Fatalf("failed to download dataset %s: %v", dataset, err)
 	}
 }
