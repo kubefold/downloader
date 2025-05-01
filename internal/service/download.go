@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/kubefold/downloader/pkg/types"
 	"io"
 	"net/http"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kubefold/downloader/pkg/types"
 
 	"github.com/DataDog/zstd"
 	"github.com/sirupsen/logrus"
@@ -32,6 +33,7 @@ func newDownloadService() DownloadService {
 }
 
 const baseUrl = "https://storage.googleapis.com/alphafold-databases/v3.0/"
+const defaultTimeout = 3 * 24 * time.Hour
 
 func (d downloadService) Download(dataset types.Dataset, destination string, rate int) error {
 	datasetStr := string(dataset)
@@ -69,7 +71,13 @@ func (d downloadService) Download(dataset types.Dataset, destination string, rat
 	}
 
 	client := &http.Client{
-		Timeout: 60 * time.Second,
+		Timeout: defaultTimeout,
+		Transport: &http.Transport{
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 30 * time.Second,
+			MaxIdleConns:        100,
+			MaxConnsPerHost:     100,
+		},
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
