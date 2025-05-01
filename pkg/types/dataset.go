@@ -77,3 +77,32 @@ func (d Dataset) Hash() string {
 		return ""
 	}
 }
+
+func (d Dataset) Name() string {
+	return string(d)
+}
+
+func (d Dataset) ShortName() string {
+	switch d {
+	case DatasetMGYClusters:
+		return "mhy-clusters"
+	case DatasetBFD:
+		return "bfd"
+	case DatasetUniRef90:
+		return "uniref90"
+	case DatasetUniProt:
+		return "uniprot"
+	case DatasetPDB:
+		return "pdb"
+	case DatasetPDBSeqReq:
+		return "pdb-seqreq"
+	case DatasetRNACentral:
+		return "rnacentral"
+	case DatasetRFam:
+		return "rfam"
+	case DatasetNT:
+		return "nt"
+	default:
+		return "unknown"
+	}
+}
